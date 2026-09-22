@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "id": "md.omodoro",
+  "name": "Omodoro",
+  "version": "1.0.0",
+  "author": "md",
+  "license": "MIT",
+  "description": "Pomodoro timer with a live countdown in the bar, a daily goal, streaks, and synced session history.",
+  "kinds": [
+    "service",
+    "bar-widget",
+    "overlay"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml",
+    "overlay": "Window.qml"
+  },
+  "barWidget": {
+    "displayName": "Omodoro",
+    "description": "Focus countdown in the bar; timer controls in the panel; stats and settings in their own window.",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "focusMinutes": 25,
+      "shortBreakMinutes": 5,
+      "longBreakMinutes": 15,
+      "longBreakEvery": 4,
+      "dailyGoal": 8,
+      "strictMode": false,
+      "overtime": false,
+      "dnd": true,
+      "sound": true,
+      "soundFile": "/usr/share/sounds/freedesktop/stereo/complete.oga",
+      "dataDir": "~/.local/share/md.omodoro",
+      "barMode": "countdown+goal"
+    },
+    "schema": [
+      {
+        "key": "focusMinutes",
+        "type": "integer",
+        "label": "Focus length (minutes)",
+        "min": 1,
+        "max": 180,
+        "step": 1,
+        "defaultValue": 25
+      },
+      {
+        "key": "shortBreakMinutes",
+        "type": "integer",
+        "label": "Short break (minutes)",
+        "min": 1,
+        "max": 60,
+        "step": 1,
+        "defaultValue": 5
+      },
+      {
+        "key": "longBreakMinutes",
+        "type": "integer",
+        "label": "Long break (minutes)",
+        "min": 1,
+        "max": 120,
+        "step": 1,
+        "defaultValue": 15
+      },
+      {
+        "key": "longBreakEvery",
+        "type": "integer",
+        "label": "Long break every N pomodoros",
+        "min": 2,
+        "max": 12,
+        "step": 1,
+        "defaultValue": 4
+      },
+      {
+        "key": "dailyGoal",
+        "type": "integer",
+        "label": "Daily goal (pomodoros)",
+        "min": 1,
+        "max": 32,
+        "step": 1,
+        "defaultValue": 8
+      },
+      {
+        "key": "strictMode",
+        "type": "boolean",
+        "label": "Strict mode",
+        "defaultValue": false,
+        "description": "No pausing or skipping once a focus session starts. Abandoning still works, after a confirm."
+      },
+      {
+        "key": "overtime",
+        "type": "boolean",
+        "label": "Overtime",
+        "defaultValue": false,
+        "description": "Keep counting past zero at the end of a focus session until you finish it."
+      },
+      {
+        "key": "dnd",
+        "type": "boolean",
+        "label": "Do Not Disturb while focusing",
+        "defaultValue": true
+      },
+      {
+        "key": "sound",
+        "type": "boolean",
+        "label": "Chime at the end of each phase",
+        "defaultValue": true
+      },
+      {
+        "key": "soundFile",
+        "type": "string",
+        "label": "Chime sound file",
+        "defaultValue": "/usr/share/sounds/freedesktop/stereo/complete.oga"
+      },
+      {
+        "key": "dataDir",
+        "type": "string",
+        "label": "History folder",
+        "defaultValue": "~/.local/share/md.omodoro",
+        "description": "Put this in Dropbox to sync and back up history. Each machine writes its own file."
+      },
+      {
+        "key": "barMode",
+        "type": "enum",
+        "label": "Bar chip",
+        "options": [
+          "countdown",
+          "countdown+goal"
+        ],
+        "defaultValue": "countdown+goal"
+      }
+    ]
+  }
+}
