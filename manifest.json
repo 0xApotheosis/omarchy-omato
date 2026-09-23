@@ -3,7 +3,7 @@
   "id": "io.github.0xapotheosis.omato",
   "name": "Omato",
   "version": "1.0.0",
-  "author": "md",
+  "author": "mattio",
   "license": "MIT",
   "description": "Pomodoro timer with a live countdown in the bar, a daily goal, streaks, and synced session history.",
   "kinds": [
