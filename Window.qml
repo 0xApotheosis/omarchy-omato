@@ -7,8 +7,8 @@ import "components"
 
 // Stats and settings, kept out of the bar panel, and the breathing lead-in
 // before focus. Summoned by the shell:
-//   omarchy-shell shell summon md.omodoro '{"tab":"stats"}'
-//   omarchy-shell shell summon md.omodoro '{"mode":"breathe"}'
+//   omarchy-shell shell summon io.github.0xapotheosis.omodoro '{"tab":"stats"}'
+//   omarchy-shell shell summon io.github.0xapotheosis.omodoro '{"mode":"breathe"}'
 Item {
   id: root
 
@@ -64,7 +64,7 @@ Item {
     interval: 320
     onTriggered: {
       root.opened = false
-      if (root.shell) root.shell.hide("md.omodoro")
+      if (root.shell) root.shell.hide(Model.PLUGIN_ID)
     }
   }
 

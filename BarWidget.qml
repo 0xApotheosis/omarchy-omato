@@ -1,15 +1,16 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "TimerModel.js" as Model
 
 // Omodoro bar chip: phase glyph + countdown (+ today's goal progress).
 // The service owns the timer; this widget renders it and hosts the panel.
 // Left click opens the panel, middle click starts/pauses, right click skips.
 BarWidget {
   id: root
-  moduleName: "md.omodoro"
+  moduleName: Model.PLUGIN_ID
 
-  readonly property var service: bar && bar.shell ? bar.shell.serviceFor("md.omodoro") : null
+  readonly property var service: bar && bar.shell ? bar.shell.serviceFor(Model.PLUGIN_ID) : null
 
   function injectPanel() {
     var target = panelLoader.item

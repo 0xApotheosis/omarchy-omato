@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "md.omodoro",
+  "id": "io.github.0xapotheosis.omodoro",
   "name": "Omodoro",
   "version": "1.0.0",
   "author": "md",
@@ -35,7 +35,7 @@
       "dnd": true,
       "sound": true,
       "soundFile": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-      "dataDir": "~/.local/share/md.omodoro",
+      "dataDir": "~/.local/share/omodoro",
       "barMode": "countdown+goal"
     },
     "schema": [
@@ -136,7 +136,7 @@
         "key": "dataDir",
         "type": "string",
         "label": "History folder",
-        "defaultValue": "~/.local/share/md.omodoro",
+        "defaultValue": "~/.local/share/omodoro",
         "description": "Put this in Dropbox to sync and back up history. Each machine writes its own file."
       },
       {

@@ -2,6 +2,9 @@
 
 // Pure timer policy and formatting. No Qt objects here.
 
+// Must match manifest.json. Also the IPC target.
+var PLUGIN_ID = "io.github.0xapotheosis.omodoro"
+
 var DEFAULTS = {
   focusMinutes: 25,
   shortBreakMinutes: 5,
@@ -15,7 +18,7 @@ var DEFAULTS = {
   dnd: true,
   sound: true,
   soundFile: "/usr/share/sounds/freedesktop/stereo/complete.oga",
-  dataDir: "~/.local/share/md.omodoro",
+  dataDir: "~/.local/share/omodoro",
   barMode: "countdown+goal"
 }
 

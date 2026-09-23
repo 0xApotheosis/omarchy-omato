@@ -8,7 +8,7 @@ import "components"
 // today's progress. Stats and settings open in their own window.
 Panel {
   id: root
-  moduleName: "md.omodoro"
+  moduleName: Model.PLUGIN_ID
   manageIpc: false
 
   property var service: null
@@ -77,7 +77,7 @@ Panel {
   // The overlay takes exclusive keyboard focus, so the popup closes first.
   function openWindow(tab) {
     root.close()
-    if (root.bar && root.bar.shell) root.bar.shell.summon("md.omodoro", JSON.stringify({ tab: tab }))
+    if (root.bar && root.bar.shell) root.bar.shell.summon(Model.PLUGIN_ID, JSON.stringify({ tab: tab }))
   }
 
   function primary() {

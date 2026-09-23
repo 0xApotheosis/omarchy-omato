@@ -54,7 +54,7 @@ conflicted copies, because no two machines ever write the same file.
 **Settings → History** can move the existing files to a new folder, and
 **Export JSON + CSV** writes a merged snapshot to `<dataDir>/exports/`.
 
-The running timer itself (`~/.local/state/md.omodoro/timer.json`) stays
+The running timer itself (`~/.local/state/omodoro/timer.json`) stays
 local. It stores end times rather than counting ticks, so the timer
 survives plugin reloads, shell restarts, and suspend.
 
@@ -67,8 +67,18 @@ survives plugin reloads, shell restarts, and suspend.
 
 ```bash
 omarchy plugin add https://github.com/0xApotheosis/omarchy-omodoro.git --enable
-omarchy bar move md.omodoro --section center
+omarchy bar move io.github.0xapotheosis.omodoro --section center
 ```
+
+## Remove
+
+```bash
+omarchy plugin remove io.github.0xapotheosis.omodoro
+```
+
+This unloads and deletes the plugin. Session history in `dataDir` and the
+timer state in `~/.local/state/omodoro/` are left in place; delete them by
+hand if you don't want to keep them.
 
 ## Settings
 
@@ -89,7 +99,7 @@ and editable in the Settings tab.
 | `dnd` | `true` | Do Not Disturb while focusing |
 | `sound` | `true` | chime at the end of each phase |
 | `soundFile` | freedesktop `complete.oga` | chime sound |
-| `dataDir` | `~/.local/share/md.omodoro` | history folder, e.g. `~/Dropbox/Omarchy/omodoro` |
+| `dataDir` | `~/.local/share/omodoro` | history folder, e.g. `~/Dropbox/Omarchy/omodoro` |
 | `barMode` | `countdown+goal` | `countdown` or `countdown+goal` |
 
 ## Mouse, keyboard, and IPC
@@ -104,14 +114,14 @@ skips, `a` abandons (press twice), `e` edits the label, `t` opens stats,
 In the window, `1` and `2` switch tabs.
 
 ```bash
-omarchy-shell md.omodoro toggle          # start / pause / resume / finish overtime
-omarchy-shell md.omodoro skip
-omarchy-shell md.omodoro abandon
-omarchy-shell md.omodoro setLabel "writing"
-omarchy-shell md.omodoro status          # one-line summary
-omarchy-shell md.omodoro stats           # open the stats window
-omarchy-shell md.omodoro settings
-omarchy-shell md.omodoro exportHistory
+omarchy-shell io.github.0xapotheosis.omodoro toggle          # start / pause / resume / finish overtime
+omarchy-shell io.github.0xapotheosis.omodoro skip
+omarchy-shell io.github.0xapotheosis.omodoro abandon
+omarchy-shell io.github.0xapotheosis.omodoro setLabel "writing"
+omarchy-shell io.github.0xapotheosis.omodoro status          # one-line summary
+omarchy-shell io.github.0xapotheosis.omodoro stats           # open the stats window
+omarchy-shell io.github.0xapotheosis.omodoro settings
+omarchy-shell io.github.0xapotheosis.omodoro exportHistory
 ```
 
 These work well bound to Hyprland keys, for example in `~/.config/hypr/bindings.lua`.

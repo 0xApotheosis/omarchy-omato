@@ -7,7 +7,7 @@ import "ServiceGuard.js" as Guard
 
 // Owner of all Omodoro state. A `service` is mounted once per session, a
 // `bar-widget` once per monitor, so the timer lives here and the widgets
-// reach it through `bar.shell.serviceFor("md.omodoro")`.
+// reach it through `bar.shell.serviceFor(pluginId)`.
 //
 // Timing is wall-clock: only `endsAt` (or `pausedRemaining`) is stored, so a
 // plugin reload, shell restart, or suspend resumes exactly where it was.
@@ -18,9 +18,9 @@ Item {
   property var shell: null
   property var manifest: null
 
-  readonly property string pluginId: "md.omodoro"
+  readonly property string pluginId: Model.PLUGIN_ID
   readonly property string home: Quickshell.env("HOME")
-  readonly property string stateDir: home + "/.local/state/md.omodoro"
+  readonly property string stateDir: home + "/.local/state/omodoro"
 
   // ---- settings, inline on the bar entry in shell.json. Read from the file:
   //      the shell's barConfig snapshot only refreshes on plugin rescans.
@@ -414,7 +414,7 @@ Item {
   Loader {
     active: root.active && root.ipcReady
     sourceComponent: IpcHandler {
-      target: "md.omodoro"
+      target: root.pluginId
 
       function start(): string { return root.start() ? "ok" : "noop" }
       function pause(): string { return root.pause() ? "ok" : "noop" }
