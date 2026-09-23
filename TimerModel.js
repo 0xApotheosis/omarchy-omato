@@ -17,7 +17,7 @@ var DEFAULTS = {
   barMode: "countdown+goal"
 }
 
-// A forgotten overtime session stops counting after this long.
+// Forgotten overtime or extra rest stops counting after this long.
 var MAX_OVERTIME_SEC = 3600
 
 var G = {
@@ -100,7 +100,7 @@ function nextPhase(phase, cycleCount, cfg) {
   return cycleCount > 0 && cycleCount % cfg.longBreakEvery === 0 ? "long" : "short"
 }
 
-// Seconds left; negative once a focus session runs into overtime.
+// Seconds left; negative in focus overtime or extra rest.
 function remainingSec(paused, pausedRemaining, endsAt, nowMs) {
   return paused ? pausedRemaining : Math.ceil((endsAt - nowMs) / 1000)
 }
@@ -136,10 +136,12 @@ function barLabel(s) {
   return glyph(s.phase, s.paused, s.remaining < 0) + " " + fmtClock(s.remaining) + goal
 }
 
+var overLabel = phase => phase === "focus" ? " overtime" : " extra rest"
+
 function tooltip(s) {
   var parts = []
   if (s.phase === "idle") parts.push("Up next: " + NAMES[s.upNext] + " " + fmtClock(s.upNextSec))
-  else parts.push(NAMES[s.phase] + (s.paused ? " (paused)" : "") + " · " + fmtClock(s.remaining) + (s.remaining < 0 ? " overtime" : " left"))
+  else parts.push(NAMES[s.phase] + (s.paused ? " (paused)" : "") + " · " + fmtClock(s.remaining) + (s.remaining < 0 ? overLabel(s.phase) : " left"))
   if (s.label) parts.push(s.label)
   parts.push(s.today + " of " + s.goal + " today")
   if (s.streak > 0) parts.push(s.streak + "-day streak")

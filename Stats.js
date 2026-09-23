@@ -24,22 +24,31 @@ var addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n)
 
 var isPomodoro = s => s.kind === "focus" && s.outcome === "completed"
 
-var emptyDay = () => ({ pomodoros: 0, focusSec: 0 })
+var emptyDay = () => ({ pomodoros: 0, focusSec: 0, extraRestSec: 0 })
 
-// One pass over the records; every view reads from this.
+var seconds = v => Math.max(0, Number(v) || 0)
+
+// One pass over the records; every view reads from this. Breaks only
+// contribute the rest they ran over.
 function index(sessions) {
   var days = {}
   var hours = Array.from({ length: 24 }, () => 0)
   var labels = {}
   var totals = emptyDay()
-  sessions.filter(s => s.kind === "focus").forEach(s => {
+  sessions.forEach(s => {
     var start = new Date(s.start)
     if (isNaN(start.getTime())) return
     var key = dayKey(start)
     var day = days[key] || (days[key] = emptyDay())
+    if (s.kind !== "focus") {
+      var extra = seconds(s.overtimeSec)
+      day.extraRestSec += extra
+      totals.extraRestSec += extra
+      return
+    }
     var label = s.label || "Unlabelled"
     var tag = labels[label] || (labels[label] = { label: label, pomodoros: 0, focusSec: 0 })
-    var sec = Math.max(0, Number(s.actualSec) || 0)
+    var sec = seconds(s.actualSec)
     var done = isPomodoro(s) ? 1 : 0
     day.pomodoros += done
     day.focusSec += sec
@@ -69,7 +78,8 @@ function perDay(idx, count, nowMs) {
       label: count <= 7 ? WEEKDAYS[d.getDay()] : String(d.getDate()),
       title: WEEKDAYS[d.getDay()] + " " + d.getDate() + " " + MONTHS[d.getMonth()],
       pomodoros: day.pomodoros,
-      focusSec: day.focusSec
+      focusSec: day.focusSec,
+      extraRestSec: day.extraRestSec
     }
   })
 }
@@ -77,7 +87,8 @@ function perDay(idx, count, nowMs) {
 function sumDays(idx, count, nowMs) {
   return perDay(idx, count, nowMs).reduce((acc, d) => ({
     pomodoros: acc.pomodoros + d.pomodoros,
-    focusSec: acc.focusSec + d.focusSec
+    focusSec: acc.focusSec + d.focusSec,
+    extraRestSec: acc.extraRestSec + d.extraRestSec
   }), emptyDay())
 }
 

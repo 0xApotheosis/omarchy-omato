@@ -18,6 +18,9 @@ live in their own window, opened from the two icons at the top of the panel.
 - **Overtime.** When focus hits zero the chime plays and the timer keeps
   counting up until you finish it. The extra time is recorded. A forgotten
   session stops counting after an hour.
+- **Extra rest.** Breaks always count past zero. Starting the next focus
+  (or skipping) ends the break and records how far it ran over. Stats show
+  extra rest for today and the last 7 days.
 - **Do Not Disturb.** Turned on for focus and turned back off afterwards,
   unless it was already on before.
 - **Stats.** Last 7 and 30 days, a year heatmap, focus by time of day, and
@@ -75,7 +78,8 @@ and editable in the Settings tab.
 In the bar, left click opens the panel, middle click starts or pauses, and
 right click skips.
 
-In the panel, `space` starts, pauses, resumes, or finishes overtime, `s`
+In the panel, `space` starts, pauses, resumes, finishes overtime, or ends
+extra rest and starts focus, `s`
 skips, `a` abandons (press twice), `e` edits the label, `t` opens stats,
 `,` opens settings, `esc` closes, and `tab` moves to the next bar panel.
 In the window, `1` and `2` switch tabs.

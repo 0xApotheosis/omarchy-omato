@@ -18,7 +18,9 @@ Panel {
 
   readonly property bool ready: service !== null
   readonly property string phase: ready ? service.phase : "idle"
-  readonly property bool onBreak: phase === "short" || phase === "long"
+  readonly property bool onBreak: ready && service.onBreak
+  readonly property bool extraRest: ready && service.inExtraRest
+  readonly property bool overtime: ready && service.inOvertime && !extraRest
   property bool confirmAbandon: false
 
   readonly property color fg: bar ? bar.foreground : Color.foreground
@@ -29,19 +31,24 @@ Panel {
     : service.inOvertime ? urgent
     : onBreak ? accent
     : service.paused || phase === "idle" ? dim : fg
+  readonly property color ringColor: !ready ? dim
+    : service.inOvertime ? urgent
+    : service.paused ? Util.alpha(accent, 0.5) : accent
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property string phaseName: {
     if (!ready) return ""
     if (phase === "idle") return "Up next: " + Model.NAMES[service.upNext]
-    if (service.inOvertime) return "Overtime"
+    if (extraRest) return "Extra rest"
+    if (overtime) return "Overtime"
     return Model.NAMES[phase] + (service.paused ? " · paused" : "")
   }
 
-  readonly property string primaryText: !ready ? "" : service.inOvertime ? "Finish"
+  readonly property string primaryText: !ready ? "" : extraRest ? "Focus"
+    : overtime ? "Finish"
     : phase === "idle" ? "Start" : service.paused ? "Resume" : "Pause"
-  readonly property string primaryIcon: !ready ? "" : service.inOvertime ? Model.G.finish
-    : phase === "idle" || service.paused ? Model.G.play : Model.G.pause
+  readonly property string primaryIcon: !ready ? "" : overtime ? Model.G.finish
+    : phase === "idle" || service.paused || extraRest ? Model.G.play : Model.G.pause
 
   // ---- lifecycle (same contract omarchy.weather implements)
   function openFromHotkey() {
@@ -74,9 +81,7 @@ Panel {
   }
 
   function primary() {
-    if (!ready) return
-    if (service.inOvertime) service.finish()
-    else service.toggle()
+    if (ready) service.toggle()
   }
 
   function abandon() {
@@ -177,8 +182,8 @@ Panel {
             height: parent.height
             progress: root.ready && root.service.running ? root.service.progress : 0
             thickness: Style.space(6)
-            trackColor: Util.alpha(root.fg, 0.12)
-            fillColor: root.phaseColor
+            trackColor: Util.alpha(root.accent, 0.18)
+            fillColor: root.ringColor
           }
 
           Column {
@@ -232,7 +237,7 @@ Panel {
             fontFamily: root.fontFamily
             enabled: root.ready && (root.phase === "idle" || root.service.paused
               || root.service.inOvertime || root.service.canPause)
-            tooltipText: "Space"
+            tooltipText: root.extraRest ? "End the break and start focusing (Space)" : "Space"
             onClicked: root.primary()
           }
 

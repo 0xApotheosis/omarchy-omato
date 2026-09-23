@@ -97,7 +97,7 @@ Item {
       Grid {
         id: tiles
         width: parent.width
-        columns: 4
+        columns: 5
         spacing: Style.space(8)
         readonly property real tileWidth: (width - spacing * (columns - 1)) / columns
 
@@ -120,6 +120,13 @@ Item {
           title: "Streak"
           value: view.streak + (view.streak === 1 ? " day" : " days")
           note: "Best " + Stats.bestStreak(view.idx, view.goal)
+        }
+
+        StatTile {
+          width: tiles.tileWidth
+          title: "Extra rest"
+          value: Model.fmtDuration(view.today.extraRestSec)
+          note: Model.fmtDuration(view.week.extraRestSec) + " in 7 days"
         }
 
         StatTile {

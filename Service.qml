@@ -60,7 +60,10 @@ Item {
   readonly property int remaining: running
     ? Model.remainingSec(paused, st.pausedRemaining, st.endsAt, now)
     : plannedSec
-  readonly property bool inOvertime: phase === "focus" && remaining < 0
+  readonly property bool onBreak: phase === "short" || phase === "long"
+  // Past the planned end: focus overtime, or extra rest on a break.
+  readonly property bool inOvertime: running && remaining < 0
+  readonly property bool inExtraRest: onBreak && inOvertime
   readonly property real progress: plannedSec > 0 ? Math.max(0, Math.min(1, 1 - remaining / plannedSec)) : 0
   readonly property bool locked: config.strictMode && phase === "focus" && !inOvertime
   readonly property bool canPause: running && !locked && !inOvertime
@@ -84,6 +87,7 @@ Item {
   // ---- actions
   function start() {
     if (paused) return resume()
+    if (inExtraRest) complete("completed", Date.now())
     if (running) return false
     begin(upNext)
     return true
@@ -120,7 +124,7 @@ Item {
   }
 
   function toggle() {
-    if (!running) return start()
+    if (!running || inExtraRest) return start()
     if (inOvertime) return finish()
     return paused ? resume() : pause()
   }
@@ -201,31 +205,34 @@ Item {
     runEffects(releasing, message || null)
   }
 
-  // A phase that ran out while the shell was down ends silently at its
-  // scheduled time; one that runs out now chimes.
+  function endMessage(counting) {
+    if (phase !== "focus")
+      return { summary: "Break's over", body: "Extra rest is counting. Start the next focus when you're ready." }
+    if (counting)
+      return { summary: "Focus time's up", body: "Overtime is counting. Finish when you're ready." }
+    var next = Model.nextPhase("focus", cycleCount + 1, config)
+    return {
+      summary: "Pomodoro done",
+      body: (todayCount + 1) + " of " + config.dailyGoal + " today. Up next: " + Model.NAMES[next].toLowerCase() + "."
+    }
+  }
+
+  // Breaks always count past their end as extra rest; focus only with the
+  // overtime setting. Either stops counting after MAX_OVERTIME_SEC. A phase
+  // that ran out while the shell was down stays silent.
   function onTick() {
     now = Date.now()
     if (!ticking || st.endsAt <= 0 || remaining > 0) return
     var fresh = now - st.endsAt < 60000
-    if (phase === "focus" && config.overtime) {
+    if (phase !== "focus" || config.overtime) {
       if (!st.alerted) {
         st.alerted = true
-        if (fresh) runEffects(false, { summary: "Focus time's up", body: "Overtime is counting. Finish when you're ready." })
+        if (fresh) runEffects(false, endMessage(true))
       }
       if (-remaining >= Model.MAX_OVERTIME_SEC) complete("completed", st.endsAt + Model.MAX_OVERTIME_SEC * 1000)
       return
     }
-    var message = null
-    if (fresh && phase === "focus") {
-      var next = Model.nextPhase("focus", cycleCount + 1, config)
-      message = {
-        summary: "Pomodoro done",
-        body: (todayCount + 1) + " of " + config.dailyGoal + " today. Up next: " + Model.NAMES[next].toLowerCase() + "."
-      }
-    } else if (fresh) {
-      message = { summary: "Break's over", body: "Ready for the next focus session." }
-    }
-    complete("completed", st.endsAt, message)
+    complete("completed", st.endsAt, fresh ? endMessage(false) : null)
   }
 
   // ---- side effects
