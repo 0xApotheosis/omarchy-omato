@@ -76,8 +76,13 @@ Item {
   readonly property int todayCount: todayStats.pomodoros
   readonly property int streak: Stats.streak(index, config.dailyGoal, now)
 
+  // Guided breathing before focus. Not persisted: a restart drops it.
+  property real breathStartedAt: 0
+  readonly property bool breathing: breathStartedAt > 0
+  readonly property int breathMs: config.breaths * Model.BREATH_MS
+
   readonly property var summary: ({
-    phase: phase, paused: paused, remaining: remaining, upNext: upNext,
+    breathing: breathing, phase: phase, paused: paused, remaining: remaining, upNext: upNext,
     upNextSec: Model.durationSec(upNext, config), label: label,
     today: todayCount, goal: config.dailyGoal, streak: streak, mode: config.barMode
   })
@@ -86,10 +91,34 @@ Item {
 
   // ---- actions
   function start() {
+    if (breathing) return finishBreath()
     if (paused) return resume()
     if (inExtraRest) complete("completed", Date.now())
     if (running) return false
-    begin(upNext)
+    if (upNext === "focus" && config.breathe) beginBreath()
+    else begin(upNext)
+    return true
+  }
+
+  function beginBreath() {
+    breathStartedAt = Date.now()
+    breathTimer.restart()
+    if (shell) shell.summon(pluginId, JSON.stringify({ mode: "breathe" }))
+  }
+
+  // Ends the lead-in, on time or early, and starts focus.
+  function finishBreath() {
+    if (!breathing) return false
+    breathTimer.stop()
+    breathStartedAt = 0
+    begin("focus")
+    return true
+  }
+
+  function cancelBreath() {
+    if (!breathing) return false
+    breathTimer.stop()
+    breathStartedAt = 0
     return true
   }
 
@@ -124,7 +153,7 @@ Item {
   }
 
   function toggle() {
-    if (!running || inExtraRest) return start()
+    if (breathing || !running || inExtraRest) return start()
     if (inOvertime) return finish()
     return paused ? resume() : pause()
   }
@@ -146,6 +175,7 @@ Item {
   }
 
   function abandon() {
+    if (breathing) return cancelBreath()
     if (!running) return false
     complete("abandoned", Date.now())
     return true
@@ -340,6 +370,12 @@ Item {
     repeat: true
     triggeredOnStart: true
     onTriggered: root.onTick()
+  }
+
+  Timer {
+    id: breathTimer
+    interval: root.breathMs
+    onTriggered: root.finishBreath()
   }
 
   // Keeps "today" honest across midnight while nothing is running.

@@ -2,12 +2,13 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
-import qs.Ui
-import "stats"
-import "settings"
+import "TimerModel.js" as Model
+import "components"
 
-// Stats and settings, kept out of the bar panel. Summoned by the shell:
+// Stats and settings, kept out of the bar panel, and the breathing lead-in
+// before focus. Summoned by the shell:
 //   omarchy-shell shell summon md.omodoro '{"tab":"stats"}'
+//   omarchy-shell shell summon md.omodoro '{"mode":"breathe"}'
 Item {
   id: root
 
@@ -17,31 +18,62 @@ Item {
   property var service: null
 
   property bool opened: false
+  property bool shown: false
+  property string mode: "window"
   property string tab: "stats"
 
+  readonly property bool breathing: mode === "breathe"
   readonly property string family: Style.font.menuFamily
   readonly property color foreground: Color.menu.text
-  readonly property var borderSpec: Border.surfaceSpec(
-    "menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
 
   function open(payloadJson) {
-    try {
-      var payload = payloadJson ? JSON.parse(payloadJson) : {}
-      if (payload.tab === "stats" || payload.tab === "settings") root.tab = payload.tab
-    } catch (e) {
-      // Not worth refusing to open over.
-    }
+    var payload = {}
+    try { payload = payloadJson ? JSON.parse(payloadJson) : {} } catch (e) { /* open anyway */ }
+    root.mode = payload.mode === "breathe" ? "breathe" : "window"
+    if (payload.tab === "stats" || payload.tab === "settings") root.tab = payload.tab
+    hideTimer.stop()
     root.opened = true
-    Qt.callLater(() => card.forceActiveFocus())
+    root.shown = true
+    Qt.callLater(() => (root.breathing ? breath : card).forceActiveFocus())
   }
 
   function close() {
+    hideTimer.stop()
+    root.shown = false
     root.opened = false
   }
 
+  // Fades out, then hands back to the shell.
   function dismiss() {
-    root.opened = false
-    if (root.shell) root.shell.hide("md.omodoro")
+    if (!root.opened || hideTimer.running) return
+    root.shown = false
+    hideTimer.restart()
+  }
+
+  function handleEscape() {
+    if (root.breathing && root.service && root.service.breathing) root.service.cancelBreath()
+    else root.dismiss()
+  }
+
+  function startNow() {
+    if (root.service) root.service.finishBreath()
+  }
+
+  Timer {
+    id: hideTimer
+    interval: 320
+    onTriggered: {
+      root.opened = false
+      if (root.shell) root.shell.hide("md.omodoro")
+    }
+  }
+
+  // The lead-in ended, was skipped, or was cancelled.
+  Connections {
+    target: root.service
+    function onBreathingChanged() {
+      if (root.breathing && !root.service.breathing) root.dismiss()
+    }
   }
 
   PanelWindow {
@@ -56,106 +88,66 @@ Item {
 
     Shortcut {
       sequence: "Escape"
-      onActivated: root.dismiss()
+      onActivated: root.handleEscape()
     }
 
-    Rectangle {
+    Item {
       anchors.fill: parent
-      color: Color.menu.scrim
-    }
+      opacity: root.shown ? 1 : 0
 
-    MouseArea {
-      anchors.fill: parent
-      onClicked: root.dismiss()
-    }
-
-    BorderSurface {
-      id: card
-      anchors.centerIn: parent
-      width: Math.min(Style.space(820), window.width - Style.gapsOut * 2)
-      height: Math.min(Style.space(780), window.height - Style.gapsOut * 2)
-      radius: Style.cornerRadius
-      color: Color.menu.background
-      borderSpec: root.borderSpec
-      padding: Style.spacing.panelPadding
-      focus: true
-
-      Keys.onPressed: function(event) {
-        if (event.text === "1") { root.tab = "stats"; event.accepted = true }
-        else if (event.text === "2") { root.tab = "settings"; event.accepted = true }
+      Behavior on opacity {
+        NumberAnimation { duration: 320; easing.type: Easing.InOutSine }
       }
 
-      MouseArea { anchors.fill: parent }
-
-      Item {
+      Rectangle {
         anchors.fill: parent
-        anchors.topMargin: card.contentTopInset
-        anchors.bottomMargin: card.contentBottomInset
-        anchors.leftMargin: card.contentLeftInset
-        anchors.rightMargin: card.contentRightInset
+        color: Color.menu.scrim
+      }
 
-        Item {
-          id: header
-          anchors { top: parent.top; left: parent.left; right: parent.right }
-          height: Math.max(heading.implicitHeight, tabRow.implicitHeight)
+      Rectangle {
+        anchors.fill: parent
+        color: "black"
+        opacity: root.breathing ? 0.6 : 0
+      }
 
-          Text {
-            id: heading
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: "Omodoro"
-            color: root.foreground
-            font.family: root.family
-            font.pixelSize: Style.font.title
-            font.weight: Font.Medium
-          }
+      MouseArea {
+        anchors.fill: parent
+        onClicked: root.breathing ? root.startNow() : root.dismiss()
+      }
 
-          ButtonGroup {
-            id: tabRow
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            foreground: root.foreground
-            fontFamily: root.family
-            fontSize: Style.font.caption
-            focusable: false
-            options: [{ value: "stats", label: "Stats" }, { value: "settings", label: "Settings" }]
-            value: root.tab
-            onChanged: function(value) { root.tab = value }
-          }
-        }
+      BreathView {
+        id: breath
+        anchors.fill: parent
+        visible: root.opened && root.breathing
+        startedAt: root.service ? root.service.breathStartedAt : 0
+        breaths: root.service ? root.service.config.breaths : 1
+        label: root.service ? root.service.label : ""
+        nextText: root.service
+          ? Model.NAMES.focus + " " + Model.fmtClock(Model.durationSec("focus", root.service.config))
+          : ""
+        foreground: root.foreground
+        fontFamily: root.family
 
-        PanelSeparator {
-          id: rule
-          anchors { top: header.bottom; left: parent.left; right: parent.right }
-          anchors.topMargin: Style.space(12)
-        }
-
-        Item {
-          anchors { top: rule.bottom; bottom: parent.bottom; left: parent.left; right: parent.right }
-          anchors.topMargin: Style.space(14)
-
-          Loader {
-            anchors.fill: parent
-            active: root.opened && root.tab === "stats"
-            visible: active
-            sourceComponent: StatsView {
-              service: root.service
-              foreground: root.foreground
-              fontFamily: root.family
-            }
-          }
-
-          Loader {
-            anchors.fill: parent
-            active: root.opened && root.tab === "settings"
-            visible: active
-            sourceComponent: SettingsView {
-              service: root.service
-              foreground: root.foreground
-              fontFamily: root.family
-            }
+        Keys.onPressed: function(event) {
+          if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.startNow()
+            event.accepted = true
           }
         }
+      }
+
+      WindowCard {
+        id: card
+        visible: !root.breathing
+        anchors.centerIn: parent
+        width: Math.min(Style.space(820), window.width - Style.gapsOut * 2)
+        height: Math.min(Style.space(780), window.height - Style.gapsOut * 2)
+        service: root.service
+        active: root.opened && !root.breathing
+        tab: root.tab
+        foreground: root.foreground
+        family: root.family
+        onTabChosen: function(value) { root.tab = value }
       }
     }
   }

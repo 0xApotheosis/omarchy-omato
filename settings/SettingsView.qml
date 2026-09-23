@@ -28,7 +28,7 @@ Item {
     fontFamily: view.fontFamily
   }
 
-  component Minutes: NumberField {
+  component NumberSetting: NumberField {
     property string key: ""
     value: view.cfg[key] || 0
     foreground: view.foreground
@@ -73,11 +73,11 @@ Item {
         width: parent.width
         spacing: Style.space(16)
 
-        Minutes { key: "focusMinutes"; label: "Focus (min)"; from: 1; to: 180 }
-        Minutes { key: "shortBreakMinutes"; label: "Short break (min)"; from: 1; to: 60 }
-        Minutes { key: "longBreakMinutes"; label: "Long break (min)"; from: 1; to: 120 }
-        Minutes { key: "longBreakEvery"; label: "Long break every"; from: 2; to: 12 }
-        Minutes { key: "dailyGoal"; label: "Daily goal"; from: 1; to: 32 }
+        NumberSetting { key: "focusMinutes"; label: "Focus (min)"; from: 1; to: 180 }
+        NumberSetting { key: "shortBreakMinutes"; label: "Short break (min)"; from: 1; to: 60 }
+        NumberSetting { key: "longBreakMinutes"; label: "Long break (min)"; from: 1; to: 120 }
+        NumberSetting { key: "longBreakEvery"; label: "Long break every"; from: 2; to: 12 }
+        NumberSetting { key: "dailyGoal"; label: "Daily goal"; from: 1; to: 32 }
       }
 
       Note { text: "New lengths apply from the next phase." }
@@ -98,6 +98,20 @@ Item {
           key: "overtime"
           label: "Overtime"
           description: "Keep counting past zero at the end of focus until you finish it."
+        }
+
+        SettingToggle {
+          key: "breathe"
+          label: "Breathing lead-in"
+          description: "A guided breath before each focus session: 4 s in, 2 s hold, 4 s out."
+        }
+
+        NumberSetting {
+          key: "breaths"
+          visible: view.cfg.breathe === true
+          label: "Breaths"
+          from: 1
+          to: 5
         }
 
         SettingToggle {

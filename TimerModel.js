@@ -10,6 +10,8 @@ var DEFAULTS = {
   dailyGoal: 8,
   strictMode: false,
   overtime: false,
+  breathe: false,
+  breaths: 1,
   dnd: true,
   sound: true,
   soundFile: "/usr/share/sounds/freedesktop/stereo/complete.oga",
@@ -19,6 +21,10 @@ var DEFAULTS = {
 
 // Forgotten overtime or extra rest stops counting after this long.
 var MAX_OVERTIME_SEC = 3600
+
+// One guided breath before focus, in milliseconds.
+var BREATH = { inhale: 4000, hold: 2000, exhale: 4000 }
+var BREATH_MS = BREATH.inhale + BREATH.hold + BREATH.exhale
 
 var G = {
   idle: String.fromCodePoint(0xF051B),     // md-timer_outline
@@ -73,6 +79,8 @@ function readSettings(raw) {
     dailyGoal: toInt(r.dailyGoal, d.dailyGoal, 1, 32),
     strictMode: toBool(r.strictMode, d.strictMode),
     overtime: toBool(r.overtime, d.overtime),
+    breathe: toBool(r.breathe, d.breathe),
+    breaths: toInt(r.breaths, d.breaths, 1, 5),
     dnd: toBool(r.dnd, d.dnd),
     sound: toBool(r.sound, d.sound),
     soundFile: toStr(r.soundFile, d.soundFile),
@@ -140,7 +148,8 @@ var overLabel = phase => phase === "focus" ? " overtime" : " extra rest"
 
 function tooltip(s) {
   var parts = []
-  if (s.phase === "idle") parts.push("Up next: " + NAMES[s.upNext] + " " + fmtClock(s.upNextSec))
+  if (s.breathing) parts.push("Breathing before focus")
+  else if (s.phase === "idle") parts.push("Up next: " + NAMES[s.upNext] + " " + fmtClock(s.upNextSec))
   else parts.push(NAMES[s.phase] + (s.paused ? " (paused)" : "") + " · " + fmtClock(s.remaining) + (s.remaining < 0 ? overLabel(s.phase) : " left"))
   if (s.label) parts.push(s.label)
   parts.push(s.today + " of " + s.goal + " today")

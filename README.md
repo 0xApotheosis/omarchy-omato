@@ -25,6 +25,9 @@ live in their own window, opened from the two icons at the top of the panel.
 - **Extra rest.** Breaks always count past zero. Starting the next focus
   (or skipping) ends the break and records how far it ran over. Stats show
   extra rest for today and the last 7 days.
+- **Breathing lead-in.** Optional, off by default. Starting focus first
+  plays a guided breath (4 s in, 2 s hold, 4 s out) over the whole screen,
+  then the timer starts. Space starts right away; Esc cancels.
 - **Do Not Disturb.** Turned on for focus and turned back off afterwards,
   unless it was already on before.
 - **Stats.** Last 7 and 30 days, a year heatmap, focus by time of day, and
@@ -81,6 +84,8 @@ and editable in the Settings tab.
 | `dailyGoal` | `8` | pomodoros per day for the goal and streak |
 | `strictMode` | `false` | no pause or skip during focus |
 | `overtime` | `false` | count past zero until focus is finished |
+| `breathe` | `false` | guided breath before each focus session |
+| `breaths` | `1` | breaths in the lead-in, 1 to 5 |
 | `dnd` | `true` | Do Not Disturb while focusing |
 | `sound` | `true` | chime at the end of each phase |
 | `soundFile` | freedesktop `complete.oga` | chime sound |

@@ -95,6 +95,14 @@ Panel {
     service.abandon()
   }
 
+  // The lead-in takes the whole screen.
+  Connections {
+    target: root.service
+    function onBreathingChanged() {
+      if (root.service.breathing) root.close()
+    }
+  }
+
   Timer {
     id: confirmTimer
     interval: 3000

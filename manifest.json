@@ -30,6 +30,8 @@
       "dailyGoal": 8,
       "strictMode": false,
       "overtime": false,
+      "breathe": false,
+      "breaths": 1,
       "dnd": true,
       "sound": true,
       "soundFile": "/usr/share/sounds/freedesktop/stereo/complete.oga",
@@ -95,6 +97,22 @@
         "label": "Overtime",
         "defaultValue": false,
         "description": "Keep counting past zero at the end of a focus session until you finish it."
+      },
+      {
+        "key": "breathe",
+        "type": "boolean",
+        "label": "Breathing lead-in",
+        "defaultValue": false,
+        "description": "A guided breath before each focus session: 4 s in, 2 s hold, 4 s out."
+      },
+      {
+        "key": "breaths",
+        "type": "integer",
+        "label": "Lead-in breaths",
+        "min": 1,
+        "max": 5,
+        "step": 1,
+        "defaultValue": 1
       },
       {
         "key": "dnd",
