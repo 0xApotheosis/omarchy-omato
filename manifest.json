@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.0xapotheosis.omodoro",
-  "name": "Omodoro",
+  "id": "io.github.0xapotheosis.omato",
+  "name": "Omato",
   "version": "1.0.0",
   "author": "md",
   "license": "MIT",
@@ -17,7 +17,7 @@
     "overlay": "Window.qml"
   },
   "barWidget": {
-    "displayName": "Omodoro",
+    "displayName": "Omato",
     "description": "Focus countdown in the bar; timer controls in the panel; stats and settings in their own window.",
     "category": "Productivity",
     "allowMultiple": false,
@@ -35,7 +35,7 @@
       "dnd": true,
       "sound": true,
       "soundFile": "/usr/share/sounds/freedesktop/stereo/complete.oga",
-      "dataDir": "~/.local/share/omodoro",
+      "dataDir": "~/.local/share/omato",
       "barMode": "countdown+goal"
     },
     "schema": [
@@ -136,7 +136,7 @@
         "key": "dataDir",
         "type": "string",
         "label": "History folder",
-        "defaultValue": "~/.local/share/omodoro",
+        "defaultValue": "~/.local/share/omato",
         "description": "Put this in Dropbox to sync and back up history. Each machine writes its own file."
       },
       {

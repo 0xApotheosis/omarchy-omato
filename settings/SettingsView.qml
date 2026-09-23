@@ -172,7 +172,7 @@ Item {
           id: dirField
           width: parent.width
           text: view.cfg.dataDir || ""
-          placeholderText: "~/Dropbox/Omarchy/omodoro"
+          placeholderText: "~/Dropbox/Omarchy/omato"
           foreground: view.foreground
         }
 

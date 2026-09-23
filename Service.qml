@@ -5,7 +5,7 @@ import "TimerModel.js" as Model
 import "Stats.js" as Stats
 import "ServiceGuard.js" as Guard
 
-// Owner of all Omodoro state. A `service` is mounted once per session, a
+// Owner of all Omato state. A `service` is mounted once per session, a
 // `bar-widget` once per monitor, so the timer lives here and the widgets
 // reach it through `bar.shell.serviceFor(pluginId)`.
 //
@@ -20,7 +20,7 @@ Item {
 
   readonly property string pluginId: Model.PLUGIN_ID
   readonly property string home: Quickshell.env("HOME")
-  readonly property string stateDir: home + "/.local/state/omodoro"
+  readonly property string stateDir: home + "/.local/state/omato"
 
   // ---- settings, inline on the bar entry in shell.json. Read from the file:
   //      the shell's barConfig snapshot only refreshes on plugin rescans.
@@ -271,9 +271,9 @@ Item {
     if (!releaseDnd && !message) return
     Quickshell.execDetached(["bash", "-c",
       "[ -n \"$1\" ] && omarchy-shell -q notifications setDnd off >/dev/null; "
-      + "[ -n \"$2\" ] && notify-send -a Omodoro \"$2\" \"$3\"; "
+      + "[ -n \"$2\" ] && notify-send -a Omato \"$2\" \"$3\"; "
       + "[ -n \"$4\" ] && exec pw-play \"$4\"; true",
-      "omodoro", releaseDnd ? "1" : "", message ? message.summary : "", message ? message.body : "",
+      "omato", releaseDnd ? "1" : "", message ? message.summary : "", message ? message.body : "",
       message && config.sound ? config.soundFile : ""])
   }
 

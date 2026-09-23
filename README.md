@@ -1,9 +1,9 @@
-# Omodoro
+# Omato
 
 A Pomodoro timer for the Omarchy bar.
 
 <p align="center">
-  <img src="screenshots/panel-focus.webp" width="900" alt="Omodoro timer panel open under the bar chip, mid-focus with a label, goal dots, and a streak">
+  <img src="screenshots/panel-focus.webp" width="900" alt="Omato timer panel open under the bar chip, mid-focus with a label, goal dots, and a streak">
 </p>
 
 The bar chip shows the live countdown: focus, break, paused, or overtime,
@@ -34,7 +34,7 @@ live in their own window, opened from the two icons at the top of the panel.
   focus by label.
 
 <p align="center">
-  <img src="screenshots/stats.webp" width="940" alt="Omodoro stats window with today, 7-day, streak, extra rest, and all-time tiles, daily bar charts, and a year heatmap">
+  <img src="screenshots/stats.webp" width="940" alt="Omato stats window with today, 7-day, streak, extra rest, and all-time tiles, daily bar charts, and a year heatmap">
 </p>
 
 More in [`screenshots/`](screenshots): [bar chip](screenshots/bar.webp),
@@ -54,7 +54,7 @@ conflicted copies, because no two machines ever write the same file.
 **Settings → History** can move the existing files to a new folder, and
 **Export JSON + CSV** writes a merged snapshot to `<dataDir>/exports/`.
 
-The running timer itself (`~/.local/state/omodoro/timer.json`) stays
+The running timer itself (`~/.local/state/omato/timer.json`) stays
 local. It stores end times rather than counting ticks, so the timer
 survives plugin reloads, shell restarts, and suspend.
 
@@ -66,18 +66,18 @@ survives plugin reloads, shell restarts, and suspend.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/0xApotheosis/omarchy-omodoro.git --enable
-omarchy bar move io.github.0xapotheosis.omodoro --section center
+omarchy plugin add https://github.com/0xApotheosis/omarchy-omato.git --enable
+omarchy bar move io.github.0xapotheosis.omato --section center
 ```
 
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.0xapotheosis.omodoro
+omarchy plugin remove io.github.0xapotheosis.omato
 ```
 
 This unloads and deletes the plugin. Session history in `dataDir` and the
-timer state in `~/.local/state/omodoro/` are left in place; delete them by
+timer state in `~/.local/state/omato/` are left in place; delete them by
 hand if you don't want to keep them.
 
 ## Settings
@@ -99,7 +99,7 @@ and editable in the Settings tab.
 | `dnd` | `true` | Do Not Disturb while focusing |
 | `sound` | `true` | chime at the end of each phase |
 | `soundFile` | freedesktop `complete.oga` | chime sound |
-| `dataDir` | `~/.local/share/omodoro` | history folder, e.g. `~/Dropbox/Omarchy/omodoro` |
+| `dataDir` | `~/.local/share/omato` | history folder, e.g. `~/Dropbox/Omarchy/omato` |
 | `barMode` | `countdown+goal` | `countdown` or `countdown+goal` |
 
 ## Mouse, keyboard, and IPC
@@ -114,14 +114,14 @@ skips, `a` abandons (press twice), `e` edits the label, `t` opens stats,
 In the window, `1` and `2` switch tabs.
 
 ```bash
-omarchy-shell io.github.0xapotheosis.omodoro toggle          # start / pause / resume / finish overtime
-omarchy-shell io.github.0xapotheosis.omodoro skip
-omarchy-shell io.github.0xapotheosis.omodoro abandon
-omarchy-shell io.github.0xapotheosis.omodoro setLabel "writing"
-omarchy-shell io.github.0xapotheosis.omodoro status          # one-line summary
-omarchy-shell io.github.0xapotheosis.omodoro stats           # open the stats window
-omarchy-shell io.github.0xapotheosis.omodoro settings
-omarchy-shell io.github.0xapotheosis.omodoro exportHistory
+omarchy-shell io.github.0xapotheosis.omato toggle              # start / pause / resume / finish overtime
+omarchy-shell io.github.0xapotheosis.omato skip
+omarchy-shell io.github.0xapotheosis.omato abandon
+omarchy-shell io.github.0xapotheosis.omato setLabel "writing"
+omarchy-shell io.github.0xapotheosis.omato status              # one-line summary
+omarchy-shell io.github.0xapotheosis.omato stats               # open the stats window
+omarchy-shell io.github.0xapotheosis.omato settings
+omarchy-shell io.github.0xapotheosis.omato exportHistory
 ```
 
 These work well bound to Hyprland keys, for example in `~/.config/hypr/bindings.lua`.

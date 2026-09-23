@@ -3,7 +3,7 @@ import qs.Commons
 import qs.Ui
 import "TimerModel.js" as Model
 
-// Omodoro bar chip: phase glyph + countdown (+ today's goal progress).
+// Omato bar chip: phase glyph + countdown (+ today's goal progress).
 // The service owns the timer; this widget renders it and hosts the panel.
 // Left click opens the panel, middle click starts/pauses, right click skips.
 BarWidget {
@@ -80,7 +80,7 @@ BarWidget {
       : (root.idle ? Qt.darker(root.baseForeground, 1.55) : root.baseForeground)
     horizontalMargin: 8.75
     verticalPadding: 8.75
-    tooltipText: root.service ? root.service.tooltip : "Omodoro"
+    tooltipText: root.service ? root.service.tooltip : "Omato"
 
     onPressed: function(b) {
       if (!root.service) return

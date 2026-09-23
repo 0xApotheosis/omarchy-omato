@@ -148,7 +148,7 @@ Panel {
             id: title
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            text: "Omodoro"
+            text: "Omato"
             color: root.fg
             font.family: root.fontFamily
             font.pixelSize: Style.font.title

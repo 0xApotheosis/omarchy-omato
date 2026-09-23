@@ -7,8 +7,8 @@ import "components"
 
 // Stats and settings, kept out of the bar panel, and the breathing lead-in
 // before focus. Summoned by the shell:
-//   omarchy-shell shell summon io.github.0xapotheosis.omodoro '{"tab":"stats"}'
-//   omarchy-shell shell summon io.github.0xapotheosis.omodoro '{"mode":"breathe"}'
+//   omarchy-shell shell summon io.github.0xapotheosis.omato '{"tab":"stats"}'
+//   omarchy-shell shell summon io.github.0xapotheosis.omato '{"mode":"breathe"}'
 Item {
   id: root
 
@@ -81,7 +81,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "omodoro"
+    WlrLayershell.namespace: "omato"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore

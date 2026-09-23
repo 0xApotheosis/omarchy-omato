@@ -44,7 +44,7 @@ BorderSurface {
         id: heading
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
-        text: "Omodoro"
+        text: "Omato"
         color: card.foreground
         font.family: card.family
         font.pixelSize: Style.font.title

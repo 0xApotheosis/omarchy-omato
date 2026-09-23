@@ -85,7 +85,7 @@ Item {
 
   function writeExports() {
     var stamp = Qt.formatDateTime(new Date(), "yyyy-MM-dd-HHmmss")
-    var base = dir + "/exports/omodoro-" + stamp
+    var base = dir + "/exports/omato-" + stamp
     exportJson.path = base + ".json"
     exportJson.setText(JSON.stringify({ exportedAt: new Date().toISOString(), sessions: sessions }, null, 2) + "\n")
     exportCsv.path = base + ".csv"
@@ -101,7 +101,7 @@ Item {
     moveProc.command = ["bash", "-c",
       "set -e; mkdir -p \"$2\"; for f in \"$1\"/sessions-*.jsonl; do [ -e \"$f\" ] || continue; "
       + "t=\"$2/${f##*/}\"; if [ -e \"$t\" ]; then cat \"$f\" >> \"$t\"; rm \"$f\"; else mv \"$f\" \"$t\"; fi; done",
-      "omodoro-move", dir, newDir]
+      "omato-move", dir, newDir]
     moveProc.running = true
     return true
   }
