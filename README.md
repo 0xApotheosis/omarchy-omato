@@ -2,6 +2,10 @@
 
 A Pomodoro timer for the Omarchy bar.
 
+<p align="center">
+  <img src="screenshots/panel-focus.webp" width="900" alt="Omodoro timer panel open under the bar chip, mid-focus with a label, goal dots, and a streak">
+</p>
+
 The bar chip shows the live countdown: focus, break, paused, or overtime,
 plus today's progress against your daily goal (`󰔟 18:42  3/8`). Click it for
 a minimal timer panel with a progress ring, start/pause, skip, abandon, a
@@ -25,6 +29,16 @@ live in their own window, opened from the two icons at the top of the panel.
   unless it was already on before.
 - **Stats.** Last 7 and 30 days, a year heatmap, focus by time of day, and
   focus by label.
+
+<p align="center">
+  <img src="screenshots/stats.webp" width="940" alt="Omodoro stats window with today, 7-day, streak, extra rest, and all-time tiles, daily bar charts, and a year heatmap">
+</p>
+
+More in [`screenshots/`](screenshots): [bar chip](screenshots/bar.webp),
+[long break](screenshots/panel-break.webp),
+[extra rest](screenshots/panel-extra-rest.webp),
+[time of day and labels](screenshots/stats-history.webp), and
+[settings](screenshots/settings.webp).
 
 ## History and sync
 
