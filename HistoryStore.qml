@@ -18,8 +18,15 @@ Item {
   readonly property string ownPath: dir + "/" + ownName
   readonly property bool ready: dirReady && host !== ""
 
+  // Synced history is untrusted. Refuse a file before FileView reads it, and
+  // keep only the newest records so a large file cannot stay resident.
+  readonly property int maxFileBytes: 8 * 1024 * 1024
+  readonly property int maxRecords: 20000
+  readonly property bool ownLoadable: ownName in sizes && sizes[ownName] <= maxFileBytes
+
   property bool dirReady: false
   property var files: ({})
+  property var sizes: ({})
   property var sessions: []
   readonly property var index: Stats.index(sessions)
   property var pending: []
@@ -29,13 +36,49 @@ Item {
   signal moved(string newDir, bool ok)
 
   function parseLines(text) {
-    return String(text || "").split("\n")
-      .filter(line => line.trim() !== "")
-      .map(line => { try { return JSON.parse(line) } catch (e) { return null } })
-      .filter(r => r && typeof r.id === "string" && typeof r.start === "string")
+    var lines = String(text || "").split("\n")
+    var out = []
+    for (var i = lines.length - 1; i >= 0 && out.length < maxRecords; i--) {
+      var line = lines[i].trim()
+      if (line === "") continue
+      try {
+        var record = JSON.parse(line)
+        if (record && typeof record.id === "string" && typeof record.start === "string")
+          out.push(record)
+      } catch (e) {}
+    }
+    out.reverse()
+    return out
+  }
+
+  function noteSize(name, size) {
+    if (sizes[name] === size) return
+    var next = Object.assign({}, sizes)
+    next[name] = size
+    sizes = next
+    if (size > maxFileBytes) {
+      drop(name)
+      error = name + " is over the history size limit and was not loaded"
+    }
+  }
+
+  function settleFolder() {
+    if (folder.status !== FolderListModel.Ready) return
+    var found = false
+    for (var i = 0; i < folder.count; i++) {
+      var name = folder.get(i, "fileName")
+      noteSize(name, folder.get(i, "fileSize"))
+      if (name === ownName) found = true
+    }
+    if (!found) noteSize(ownName, 0)
+    if (ready) flushPending()
   }
 
   function ingest(name, text) {
+    if (name in sizes && sizes[name] > maxFileBytes) {
+      drop(name)
+      return
+    }
     var next = Object.assign({}, files)
     next[name] = parseLines(text)
     files = next
@@ -53,23 +96,31 @@ Item {
   function merge() {
     var byId = {}
     Object.keys(files).forEach(name => files[name].forEach(r => { byId[r.id] = r }))
-    sessions = Object.keys(byId).map(id => byId[id]).sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0)
+    var merged = Object.keys(byId).map(id => byId[id]).sort((a, b) => a.start < b.start ? -1 : a.start > b.start ? 1 : 0)
+    sessions = merged.length > maxRecords ? merged.slice(merged.length - maxRecords) : merged
   }
 
   function append(record) {
-    if (!ready) {
+    if (!ready || !(ownName in sizes)) {
       pending = pending.concat([record])
       return
     }
-    var text = ownFile.text() || ""
+    var line = JSON.stringify(record) + "\n"
+    if (sizes[ownName] + line.length > maxFileBytes) {
+      error = ownName + " is over the history size limit"
+      return
+    }
+    var text = sizes[ownName] > 0 ? (ownFile.text() || "") : ""
     if (text !== "" && text.slice(-1) !== "\n") text += "\n"
-    text += JSON.stringify(record) + "\n"
+    text += line
     ownFile.setText(text)
+    noteSize(ownName, text.length)
     // FileView does not re-emit onLoaded for its own write.
     ingest(ownName, text)
   }
 
   function flushPending() {
+    if (!(ownName in sizes) || sizes[ownName] > maxFileBytes) return
     var queued = pending
     pending = []
     queued.forEach(append)
@@ -109,6 +160,7 @@ Item {
   onDirChanged: {
     dirReady = false
     files = ({})
+    sizes = ({})
     sessions = []
     if (dir === "") return
     mkdirProc.command = ["mkdir", "-p", dir]
@@ -147,12 +199,12 @@ Item {
 
   FileView {
     id: ownFile
-    path: store.ready ? store.ownPath : ""
+    path: store.ready && store.ownLoadable ? store.ownPath : ""
     blockLoading: true
+    blockAllReads: !store.ownLoadable
     atomicWrites: true
-    watchChanges: true
+    watchChanges: false
     printErrors: false
-    onFileChanged: reload()
   }
 
   FolderListModel {
@@ -161,24 +213,52 @@ Item {
     nameFilters: ["sessions-*.jsonl"]
     showDirs: false
     showDotAndDotDot: false
+    onStatusChanged: store.settleFolder()
+    onCountChanged: store.settleFolder()
   }
 
   // Dropbox replaces files by rename, which a file watch can miss; the
-  // folder model's modification time catches that case.
+  // folder model's modification time catches that case. fileSize is known
+  // before path is set, so an oversized file is never read.
   Instantiator {
     model: folder
     delegate: FileView {
       required property string fileName
       required property string filePath
+      required property int fileSize
       required property var fileModified
 
-      path: filePath
-      watchChanges: true
+      readonly property bool loadable: fileSize <= store.maxFileBytes
+
+      path: loadable ? filePath : ""
+      Component.onCompleted: store.noteSize(fileName, fileSize)
+      onFileSizeChanged: store.noteSize(fileName, fileSize)
+      blockLoading: true
+      blockAllReads: !loadable
+      watchChanges: false
       printErrors: false
-      onFileChanged: reload()
-      onFileModifiedChanged: reload()
-      onLoaded: store.ingest(fileName, text())
+      onLoadableChanged: if (!loadable) store.drop(fileName)
+      onFileModifiedChanged: sizeProbe.running = true
+      onLoaded: if (loadable) store.ingest(fileName, text())
       Component.onDestruction: store.drop(fileName)
+
+      // Stat before any reload. A synced replace can land before fileSize
+      // updates, and watchChanges would read that file immediately.
+      Process {
+        id: sizeProbe
+        command: ["stat", "-c", "%s", filePath]
+        stdout: StdioCollector {
+          waitForEnd: true
+          onStreamFinished: {
+            var size = parseInt(text.trim(), 10)
+            if (isNaN(size)) return
+            store.noteSize(fileName, size)
+            if (size > store.maxFileBytes) return
+            reload()
+            if (fileName === store.ownName && store.ownLoadable) ownFile.reload()
+          }
+        }
+      }
     }
   }
 
