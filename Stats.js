@@ -161,9 +161,15 @@ function byLabel(idx, limit) {
     .slice(0, limit || 8)
 }
 
+// Spreadsheets execute a cell whose first character is = + - @, tab, or CR,
+// including after whitespace they trim. History files are synced and can be
+// edited, so prefix those cells and keep them as text.
+var FORMULA = /^[\t\r ]*[=+\-@]|^[\t\r]/
+
 var csvCell = v => {
   var s = v === undefined || v === null ? "" : String(v)
-  return /[",\n]/.test(s) ? "\"" + s.replace(/"/g, "\"\"") + "\"" : s
+  if (FORMULA.test(s)) s = "'" + s
+  return /[",\n\r]/.test(s) ? "\"" + s.replace(/"/g, "\"\"") + "\"" : s
 }
 
 var CSV_COLUMNS = ["id", "host", "kind", "label", "start", "end", "plannedSec", "actualSec", "overtimeSec", "outcome"]
