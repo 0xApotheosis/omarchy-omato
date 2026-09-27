@@ -18,15 +18,19 @@ Item {
   readonly property string ownPath: dir + "/" + ownName
   readonly property bool ready: dirReady && host !== ""
 
-  // Synced history is untrusted. Refuse a file before FileView reads it, and
-  // keep only the newest records so a large file cannot stay resident.
+  // Synced history is untrusted. One reader opens one file at a time, and
+  // files keeps at most maxRecords across every machine, not per file.
   readonly property int maxFileBytes: 8 * 1024 * 1024
   readonly property int maxRecords: 20000
+  readonly property int maxFiles: 32
   readonly property bool ownLoadable: ownName in sizes && sizes[ownName] <= maxFileBytes
 
   property bool dirReady: false
   property var files: ({})
   property var sizes: ({})
+  property var stamps: ({})
+  property var queue: []
+  property string loadingName: ""
   property var sessions: []
   readonly property var index: Stats.index(sessions)
   property var pending: []
@@ -64,14 +68,89 @@ Item {
 
   function settleFolder() {
     if (folder.status !== FolderListModel.Ready) return
+    var entries = []
     var found = false
     for (var i = 0; i < folder.count; i++) {
       var name = folder.get(i, "fileName")
-      noteSize(name, folder.get(i, "fileSize"))
+      var entry = {
+        name: name,
+        path: folder.get(i, "filePath"),
+        size: folder.get(i, "fileSize"),
+        modified: modifiedMs(folder.get(i, "fileModified"))
+      }
       if (name === ownName) found = true
+      entries.push(entry)
+    }
+    entries.sort(function(a, b) { return b.modified - a.modified })
+    var chosen = {}
+    var opened = 0
+    for (var j = 0; j < entries.length && opened < maxFiles; j++) {
+      chosen[entries[j].name] = entries[j]
+      opened++
+    }
+    if (found && !(ownName in chosen)) {
+      for (var k = 0; k < entries.length; k++) {
+        if (entries[k].name === ownName) chosen[ownName] = entries[k]
+      }
     }
     if (!found) noteSize(ownName, 0)
+    var kept = Object.assign({}, files)
+    var removed = false
+    Object.keys(kept).forEach(function(fileName) {
+      if (!(fileName in chosen)) {
+        delete kept[fileName]
+        removed = true
+      }
+    })
+    if (removed) {
+      files = kept
+      mergeDebounce.restart()
+    }
+    Object.keys(chosen).forEach(function(fileName) {
+      var entry = chosen[fileName]
+      noteSize(fileName, entry.size)
+      var stamp = entry.size + ":" + entry.modified
+      if (stamps[fileName] === stamp || loadingName === fileName) return
+      var nextStamps = Object.assign({}, stamps)
+      nextStamps[fileName] = stamp
+      stamps = nextStamps
+      enqueue(fileName, entry.path, entry.size)
+    })
     if (ready) flushPending()
+  }
+
+  function modifiedMs(value) {
+    if (!value) return 0
+    var ms = value.getTime ? value.getTime() : new Date(value).getTime()
+    return isNaN(ms) ? 0 : ms
+  }
+
+  function enqueue(name, path, size) {
+    if (size > maxFileBytes || loadingName === name) return
+    for (var i = 0; i < queue.length; i++) if (queue[i].name === name) return
+    queue = queue.concat([{ name: name, path: path, size: size }])
+    pump()
+  }
+
+  function pump() {
+    if (loadingName !== "" || queue.length === 0) return
+    var next = queue[0]
+    queue = queue.slice(1)
+    if (next.size > maxFileBytes) {
+      drop(next.name)
+      pump()
+      return
+    }
+    loadingName = next.name
+    if (reader.path === next.path) reader.reload()
+    else reader.path = next.path
+  }
+
+  function finishRead(name, text) {
+    loadingName = ""
+    reader.path = ""
+    if (name !== "") ingest(name, text)
+    pump()
   }
 
   function ingest(name, text) {
@@ -81,7 +160,20 @@ Item {
     }
     var next = Object.assign({}, files)
     next[name] = parseLines(text)
-    files = next
+    var tagged = []
+    Object.keys(next).forEach(function(fileName) {
+      next[fileName].forEach(function(record) { tagged.push({ fileName: fileName, record: record }) })
+    })
+    tagged.sort(function(a, b) {
+      return a.record.start < b.record.start ? -1 : a.record.start > b.record.start ? 1 : 0
+    })
+    if (tagged.length > maxRecords) tagged = tagged.slice(tagged.length - maxRecords)
+    var kept = {}
+    tagged.forEach(function(item) {
+      var list = kept[item.fileName] || (kept[item.fileName] = [])
+      list.push(item.record)
+    })
+    files = kept
     mergeDebounce.restart()
   }
 
@@ -161,6 +253,10 @@ Item {
     dirReady = false
     files = ({})
     sizes = ({})
+    stamps = ({})
+    queue = []
+    loadingName = ""
+    reader.path = ""
     sessions = []
     if (dir === "") return
     mkdirProc.command = ["mkdir", "-p", dir]
@@ -217,49 +313,30 @@ Item {
     onCountChanged: store.settleFolder()
   }
 
-  // Dropbox replaces files by rename, which a file watch can miss; the
-  // folder model's modification time catches that case. fileSize is known
-  // before path is set, so an oversized file is never read.
-  Instantiator {
-    model: folder
-    delegate: FileView {
-      required property string fileName
-      required property string filePath
-      required property int fileSize
-      required property var fileModified
-
-      readonly property bool loadable: fileSize <= store.maxFileBytes
-
-      path: loadable ? filePath : ""
-      Component.onCompleted: store.noteSize(fileName, fileSize)
-      onFileSizeChanged: store.noteSize(fileName, fileSize)
-      blockLoading: true
-      blockAllReads: !loadable
-      watchChanges: false
-      printErrors: false
-      onLoadableChanged: if (!loadable) store.drop(fileName)
-      onFileModifiedChanged: sizeProbe.running = true
-      onLoaded: if (loadable) store.ingest(fileName, text())
-      Component.onDestruction: store.drop(fileName)
-
-      // Stat before any reload. A synced replace can land before fileSize
-      // updates, and watchChanges would read that file immediately.
-      Process {
-        id: sizeProbe
-        command: ["stat", "-c", "%s", filePath]
-        stdout: StdioCollector {
-          waitForEnd: true
-          onStreamFinished: {
-            var size = parseInt(text.trim(), 10)
-            if (isNaN(size)) return
-            store.noteSize(fileName, size)
-            if (size > store.maxFileBytes) return
-            reload()
-            if (fileName === store.ownName && store.ownLoadable) ownFile.reload()
-          }
-        }
-      }
+  // One reader for every machine's file. The folder listing is metadata;
+  // file contents are opened only for the newest maxFiles, and only one
+  // path is set at a time. A replace shows up as a new size or mtime.
+  FileView {
+    id: reader
+    blockLoading: true
+    blockAllReads: path === ""
+    watchChanges: false
+    printErrors: false
+    onLoaded: {
+      if (store.loadingName === "" || path === "") return
+      var name = store.loadingName
+      var body = text()
+      store.finishRead(name, body)
+      if (name === store.ownName && store.ownLoadable) ownFile.reload()
     }
+    onLoadFailed: store.finishRead("", "")
+  }
+
+  Timer {
+    interval: 2000
+    running: store.dirReady
+    repeat: true
+    onTriggered: store.settleFolder()
   }
 
   FileView {
