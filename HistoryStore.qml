@@ -165,22 +165,56 @@ Item {
   // at most maxFileBytes + 1 and exits without writing stdout when the file
   // does not fit, so a replace after the directory listing never reaches us.
   readonly property string boundedRead: "set -eu\n"
-    + "file=$1; limit=$2; tmp=$(mktemp); trap 'rm -f -- \"$tmp\"' EXIT\n"
-    + "[ -f \"$file\" ] || exit 0\n"
-    + "head -c \"$((limit + 1))\" -- \"$file\" > \"$tmp\"\n"
+    + "file=$1; limit=$2; uid=$(id -u)\n"
+    + "if [ -L \"$file\" ]; then exit 3; fi\n"
+    + "if [ ! -f \"$file\" ]; then exit 0; fi\n"
+    + "[ \"$(stat -c %u -- \"$file\")\" = \"$uid\" ] || exit 3\n"
+    + "tmp=$(mktemp); trap 'rm -f -- \"$tmp\"' EXIT\n"
+    + "dd if=\"$file\" of=\"$tmp\" bs=\"$((limit + 1))\" count=1 iflag=fullblock,nofollow status=none\n"
     + "size=$(stat -c %s -- \"$tmp\")\n"
     + "[ \"$size\" -le \"$limit\" ] || exit 2\n"
     + "cat -- \"$tmp\"\n"
 
   readonly property string boundedAppend: "set -eu\n"
-    + "file=$1; limit=$2; line=$3; dir=$(dirname -- \"$file\"); tmp=$(mktemp \"$dir/.omato-XXXXXX\")\n"
-    + "trap 'rm -f -- \"$tmp\"' EXIT\n"
-    + "if [ -f \"$file\" ]; then head -c \"$((limit + 1))\" -- \"$file\" > \"$tmp\"; fi\n"
+    + "file=$1; limit=$2; line=$3; uid=$(id -u); dir=$(dirname -- \"$file\")\n"
+    + "if [ -L \"$file\" ]; then exit 3; fi\n"
+    + "if [ -e \"$file\" ]; then [ -f \"$file\" ] && [ \"$(stat -c %u -- \"$file\")\" = \"$uid\" ] || exit 3; fi\n"
+    + "tmp=$(mktemp \"$dir/.omato-XXXXXX\"); trap 'rm -f -- \"$tmp\"' EXIT\n"
+    + "if [ -f \"$file\" ]; then dd if=\"$file\" of=\"$tmp\" bs=\"$((limit + 1))\" count=1 iflag=fullblock,nofollow status=none; fi\n"
     + "size=$(stat -c %s -- \"$tmp\"); [ \"$size\" -le \"$limit\" ] || exit 2\n"
     + "if [ \"$size\" -gt 0 ]; then last=$(tail -c 1 -- \"$tmp\" | od -An -tu1 | tr -d \" \"); [ \"$last\" = 10 ] || printf \"\\n\" >> \"$tmp\"; fi\n"
     + "printf \"%s\\n\" \"$line\" >> \"$tmp\"\n"
     + "size=$(stat -c %s -- \"$tmp\"); [ \"$size\" -le \"$limit\" ] || exit 2\n"
-    + "cat -- \"$tmp\"; mv -f -- \"$tmp\" \"$file\"; trap - EXIT\n"
+    + "cat -- \"$tmp\"\n"
+    + "if [ -e \"$file\" ]; then dd if=\"$tmp\" of=\"$file\" conv=notrunc oflag=nofollow status=none\n"
+    + "else dd if=\"$tmp\" of=\"$file\" conv=excl oflag=nofollow status=none; fi\n"
+
+  // Move merges regular files we own. Symlinks are refused before any read or
+  // write, and the write itself uses nofollow so a swapped-in link is not followed.
+  readonly property string boundedMove: "set -eu\n"
+    + "src_dir=$1; dst_dir=$2; limit=$3; uid=$(id -u)\n"
+    + "mkdir -p -- \"$dst_dir\"; shopt -s nullglob\n"
+    + "for f in \"$src_dir\"/sessions-*.jsonl; do\n"
+    + "  base=${f##*/}; t=\"$dst_dir/$base\"\n"
+    + "  if [ -L \"$f\" ] || [ ! -f \"$f\" ] || [ \"$(stat -c %u -- \"$f\")\" != \"$uid\" ]; then exit 4; fi\n"
+    + "  if [ -L \"$t\" ]; then exit 4; fi\n"
+    + "  if [ -e \"$t\" ]; then [ -f \"$t\" ] && [ \"$(stat -c %u -- \"$t\")\" = \"$uid\" ] || exit 4; fi\n"
+    + "done\n"
+    + "for f in \"$src_dir\"/sessions-*.jsonl; do\n"
+    + "  base=${f##*/}; t=\"$dst_dir/$base\"; tmp=$(mktemp)\n"
+    + "  dd if=\"$f\" of=\"$tmp\" bs=\"$((limit + 1))\" count=1 iflag=fullblock,nofollow status=none\n"
+    + "  src=$(stat -c %s -- \"$tmp\")\n"
+    + "  if [ \"$src\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; continue; fi\n"
+    + "  if [ -e \"$t\" ] || [ -L \"$t\" ]; then\n"
+    + "    if [ -L \"$t\" ] || [ ! -f \"$t\" ] || [ \"$(stat -c %u -- \"$t\")\" != \"$uid\" ]; then rm -f -- \"$tmp\"; exit 4; fi\n"
+    + "    dest=$(stat -c %s -- \"$t\")\n"
+    + "    if [ \"$((src + dest))\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; exit 3; fi\n"
+    + "    dd if=\"$tmp\" of=\"$t\" oflag=append,nofollow conv=notrunc status=none\n"
+    + "  else\n"
+    + "    dd if=\"$tmp\" of=\"$t\" conv=excl oflag=nofollow status=none\n"
+    + "  fi\n"
+    + "  rm -f -- \"$tmp\" \"$f\"\n"
+    + "done\n"
 
   function pump() {
     if (loadingName !== "" || appendProc.running || queue.length === 0) return
@@ -288,14 +322,7 @@ Item {
   function moveTo(newDir) {
     if (!newDir || newDir === dir) return false
     moveProc.target = newDir
-    moveProc.command = ["bash", "-c",
-      "set -eu; limit=$3; mkdir -p -- \"$2\"; for f in \"$1\"/sessions-*.jsonl; do [ -e \"$f\" ] || continue; "
-      + "tmp=$(mktemp); head -c \"$((limit + 1))\" -- \"$f\" > \"$tmp\"; src=$(stat -c %s -- \"$tmp\"); "
-      + "if [ \"$src\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; continue; fi; "
-      + "t=\"$2/${f##*/}\"; if [ -e \"$t\" ]; then dest=$(stat -c %s -- \"$t\"); "
-      + "if [ \"$((src + dest))\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; exit 3; fi; "
-      + "cat -- \"$tmp\" >> \"$t\"; rm -f -- \"$tmp\" \"$f\"; else mv -- \"$tmp\" \"$t\"; rm -f -- \"$f\"; fi; done",
-      "omato-move", dir, newDir, String(maxFileBytes)]
+    moveProc.command = ["bash", "-c", boundedMove, "omato-move", dir, newDir, String(maxFileBytes)]
     moveProc.running = true
     return true
   }
@@ -341,7 +368,11 @@ Item {
   Process {
     id: moveProc
     property string target: ""
-    onExited: function(code) { store.moved(target, code === 0) }
+    onExited: function(code) {
+      if (code === 4) store.error = "Refused to move a symlink or a history file you do not own"
+      else if (code === 3) store.error = "History file is over the size limit"
+      store.moved(target, code === 0)
+    }
   }
 
   Process {
@@ -361,7 +392,10 @@ Item {
       readProc.fileName = ""
       store.loadingName = ""
       if (code === 2) store.noteSize(name, store.maxFileBytes + 1)
-      else if (code === 0 && name !== "") {
+      else if (code === 3) {
+        store.drop(name)
+        store.error = name + " is a symlink or not owned by you and was not loaded"
+      } else if (code === 0 && name !== "") {
         store.noteSize(name, body.length)
         store.ingest(name, body)
       }
@@ -382,6 +416,7 @@ Item {
       var body = appendProc.body
       appendProc.body = ""
       if (code === 2) store.noteSize(store.ownName, store.maxFileBytes + 1)
+      else if (code === 3) store.error = store.ownName + " is a symlink or not owned by you"
       else if (code === 0) {
         store.noteSize(store.ownName, body.length)
         store.ingest(store.ownName, body)
