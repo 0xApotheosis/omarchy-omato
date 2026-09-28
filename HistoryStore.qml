@@ -18,12 +18,13 @@ Item {
   readonly property string ownPath: dir + "/" + ownName
   readonly property bool ready: dirReady && host !== ""
 
-  // Synced history is untrusted. One reader opens one file at a time, and
-  // files keeps at most maxRecords across every machine, not per file.
+  // Synced history is untrusted. Nothing from that directory enters the shell
+  // through FileView: a read stops at maxFileBytes + 1 and is discarded unless
+  // the whole file fits. Retained records are a fixed set of short fields.
   readonly property int maxFileBytes: 8 * 1024 * 1024
   readonly property int maxRecords: 20000
   readonly property int maxFiles: 32
-  readonly property bool ownLoadable: ownName in sizes && sizes[ownName] <= maxFileBytes
+  readonly property int maxLineLength: 1024
 
   property bool dirReady: false
   property var files: ({})
@@ -31,6 +32,7 @@ Item {
   property var stamps: ({})
   property var queue: []
   property string loadingName: ""
+  property int ioGen: 0
   property var sessions: []
   readonly property var index: Stats.index(sessions)
   property var pending: []
@@ -39,16 +41,43 @@ Item {
 
   signal moved(string newDir, bool ok)
 
+  function clip(value, max) {
+    return typeof value === "string" && value.length > max ? value.slice(0, max) : (typeof value === "string" ? value : "")
+  }
+
+  function wholeNumber(value) {
+    var n = Number(value)
+    if (!isFinite(n) || n <= 0) return 0
+    return Math.min(8640000, Math.round(n))
+  }
+
+  // Only the fields the timer writes. Anything else in a synced line is dropped.
+  function normalize(raw) {
+    if (!raw || typeof raw.id !== "string" || typeof raw.start !== "string") return null
+    if (raw.id.length > 80 || raw.start.length > 40) return null
+    return {
+      id: raw.id,
+      host: clip(raw.host, 64),
+      kind: clip(raw.kind, 16),
+      label: clip(raw.label, 80),
+      start: raw.start,
+      end: clip(raw.end, 40),
+      plannedSec: wholeNumber(raw.plannedSec),
+      actualSec: wholeNumber(raw.actualSec),
+      overtimeSec: wholeNumber(raw.overtimeSec),
+      outcome: clip(raw.outcome, 16)
+    }
+  }
+
   function parseLines(text) {
     var lines = String(text || "").split("\n")
     var out = []
     for (var i = lines.length - 1; i >= 0 && out.length < maxRecords; i--) {
       var line = lines[i].trim()
-      if (line === "") continue
+      if (line === "" || line.length > maxLineLength) continue
       try {
-        var record = JSON.parse(line)
-        if (record && typeof record.id === "string" && typeof record.start === "string")
-          out.push(record)
+        var record = normalize(JSON.parse(line))
+        if (record) out.push(record)
       } catch (e) {}
     }
     out.reverse()
@@ -128,34 +157,52 @@ Item {
   function enqueue(name, path, size) {
     if (size > maxFileBytes || loadingName === name) return
     for (var i = 0; i < queue.length; i++) if (queue[i].name === name) return
-    queue = queue.concat([{ name: name, path: path, size: size }])
+    queue = queue.concat([{ name: name, path: path }])
     pump()
   }
+
+  // The queued size is only a hint. The process below is the bound: it copies
+  // at most maxFileBytes + 1 and exits without writing stdout when the file
+  // does not fit, so a replace after the directory listing never reaches us.
+  readonly property string boundedRead: "set -eu\n"
+    + "file=$1; limit=$2; tmp=$(mktemp); trap 'rm -f -- \"$tmp\"' EXIT\n"
+    + "[ -f \"$file\" ] || exit 0\n"
+    + "head -c \"$((limit + 1))\" -- \"$file\" > \"$tmp\"\n"
+    + "size=$(stat -c %s -- \"$tmp\")\n"
+    + "[ \"$size\" -le \"$limit\" ] || exit 2\n"
+    + "cat -- \"$tmp\"\n"
+
+  readonly property string boundedAppend: "set -eu\n"
+    + "file=$1; limit=$2; line=$3; dir=$(dirname -- \"$file\"); tmp=$(mktemp \"$dir/.omato-XXXXXX\")\n"
+    + "trap 'rm -f -- \"$tmp\"' EXIT\n"
+    + "if [ -f \"$file\" ]; then head -c \"$((limit + 1))\" -- \"$file\" > \"$tmp\"; fi\n"
+    + "size=$(stat -c %s -- \"$tmp\"); [ \"$size\" -le \"$limit\" ] || exit 2\n"
+    + "if [ \"$size\" -gt 0 ]; then last=$(tail -c 1 -- \"$tmp\" | od -An -tu1 | tr -d \" \"); [ \"$last\" = 10 ] || printf \"\\n\" >> \"$tmp\"; fi\n"
+    + "printf \"%s\\n\" \"$line\" >> \"$tmp\"\n"
+    + "size=$(stat -c %s -- \"$tmp\"); [ \"$size\" -le \"$limit\" ] || exit 2\n"
+    + "cat -- \"$tmp\"; mv -f -- \"$tmp\" \"$file\"; trap - EXIT\n"
 
   function pump() {
-    if (loadingName !== "" || queue.length === 0) return
+    if (loadingName !== "" || appendProc.running || queue.length === 0) return
     var next = queue[0]
     queue = queue.slice(1)
-    if (next.size > maxFileBytes) {
-      drop(next.name)
-      pump()
-      return
-    }
     loadingName = next.name
-    if (reader.path === next.path) reader.reload()
-    else reader.path = next.path
+    readProc.fileName = next.name
+    readProc.generation = ioGen
+    readProc.body = ""
+    readProc.command = ["bash", "-c", boundedRead, "omato-read", next.path, String(maxFileBytes)]
+    readProc.running = true
   }
 
-  function finishRead(name, text) {
-    loadingName = ""
-    reader.path = ""
-    if (name !== "") ingest(name, text)
-    pump()
+  function afterIo() {
+    if (pending.length > 0) flushPending()
+    else pump()
   }
 
   function ingest(name, text) {
-    if (name in sizes && sizes[name] > maxFileBytes) {
+    if (String(text || "").length > maxFileBytes) {
       drop(name)
+      error = name + " is over the history size limit and was not loaded"
       return
     }
     var next = Object.assign({}, files)
@@ -193,29 +240,29 @@ Item {
   }
 
   function append(record) {
-    if (!ready || !(ownName in sizes)) {
+    if (!ready || !(ownName in sizes) || loadingName !== "" || appendProc.running) {
       pending = pending.concat([record])
       return
     }
-    var line = JSON.stringify(record) + "\n"
-    if (sizes[ownName] + line.length > maxFileBytes) {
+    var clean = normalize(record)
+    if (!clean) return
+    var line = JSON.stringify(clean)
+    if (line.length + 1 > maxFileBytes) {
       error = ownName + " is over the history size limit"
       return
     }
-    var text = sizes[ownName] > 0 ? (ownFile.text() || "") : ""
-    if (text !== "" && text.slice(-1) !== "\n") text += "\n"
-    text += line
-    ownFile.setText(text)
-    noteSize(ownName, text.length)
-    // FileView does not re-emit onLoaded for its own write.
-    ingest(ownName, text)
+    appendProc.generation = ioGen
+    appendProc.body = ""
+    appendProc.command = ["bash", "-c", boundedAppend, "omato-append", ownPath, String(maxFileBytes), line]
+    appendProc.running = true
   }
 
   function flushPending() {
-    if (!(ownName in sizes) || sizes[ownName] > maxFileBytes) return
-    var queued = pending
-    pending = []
-    queued.forEach(append)
+    if (!(ownName in sizes) || sizes[ownName] > maxFileBytes || appendProc.running || loadingName !== "") return
+    if (pending.length === 0) return
+    var record = pending[0]
+    pending = pending.slice(1)
+    append(record)
   }
 
   function exportAll() {
@@ -242,9 +289,13 @@ Item {
     if (!newDir || newDir === dir) return false
     moveProc.target = newDir
     moveProc.command = ["bash", "-c",
-      "set -e; mkdir -p \"$2\"; for f in \"$1\"/sessions-*.jsonl; do [ -e \"$f\" ] || continue; "
-      + "t=\"$2/${f##*/}\"; if [ -e \"$t\" ]; then cat \"$f\" >> \"$t\"; rm \"$f\"; else mv \"$f\" \"$t\"; fi; done",
-      "omato-move", dir, newDir]
+      "set -eu; limit=$3; mkdir -p -- \"$2\"; for f in \"$1\"/sessions-*.jsonl; do [ -e \"$f\" ] || continue; "
+      + "tmp=$(mktemp); head -c \"$((limit + 1))\" -- \"$f\" > \"$tmp\"; src=$(stat -c %s -- \"$tmp\"); "
+      + "if [ \"$src\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; continue; fi; "
+      + "t=\"$2/${f##*/}\"; if [ -e \"$t\" ]; then dest=$(stat -c %s -- \"$t\"); "
+      + "if [ \"$((src + dest))\" -gt \"$limit\" ]; then rm -f -- \"$tmp\"; exit 3; fi; "
+      + "cat -- \"$tmp\" >> \"$t\"; rm -f -- \"$tmp\" \"$f\"; else mv -- \"$tmp\" \"$t\"; rm -f -- \"$f\"; fi; done",
+      "omato-move", dir, newDir, String(maxFileBytes)]
     moveProc.running = true
     return true
   }
@@ -256,7 +307,7 @@ Item {
     stamps = ({})
     queue = []
     loadingName = ""
-    reader.path = ""
+    ioGen = ioGen + 1
     sessions = []
     if (dir === "") return
     mkdirProc.command = ["mkdir", "-p", dir]
@@ -293,14 +344,50 @@ Item {
     onExited: function(code) { store.moved(target, code === 0) }
   }
 
-  FileView {
-    id: ownFile
-    path: store.ready && store.ownLoadable ? store.ownPath : ""
-    blockLoading: true
-    blockAllReads: !store.ownLoadable
-    atomicWrites: true
-    watchChanges: false
-    printErrors: false
+  Process {
+    id: readProc
+    property string fileName: ""
+    property int generation: 0
+    property string body: ""
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: readProc.body = text
+    }
+    onExited: function(code) {
+      if (readProc.generation !== store.ioGen) return
+      var name = readProc.fileName
+      var body = readProc.body
+      readProc.body = ""
+      readProc.fileName = ""
+      store.loadingName = ""
+      if (code === 2) store.noteSize(name, store.maxFileBytes + 1)
+      else if (code === 0 && name !== "") {
+        store.noteSize(name, body.length)
+        store.ingest(name, body)
+      }
+      store.afterIo()
+    }
+  }
+
+  Process {
+    id: appendProc
+    property int generation: 0
+    property string body: ""
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: appendProc.body = text
+    }
+    onExited: function(code) {
+      if (appendProc.generation !== store.ioGen) return
+      var body = appendProc.body
+      appendProc.body = ""
+      if (code === 2) store.noteSize(store.ownName, store.maxFileBytes + 1)
+      else if (code === 0) {
+        store.noteSize(store.ownName, body.length)
+        store.ingest(store.ownName, body)
+      }
+      store.afterIo()
+    }
   }
 
   FolderListModel {
@@ -313,25 +400,6 @@ Item {
     onCountChanged: store.settleFolder()
   }
 
-  // One reader for every machine's file. The folder listing is metadata;
-  // file contents are opened only for the newest maxFiles, and only one
-  // path is set at a time. A replace shows up as a new size or mtime.
-  FileView {
-    id: reader
-    blockLoading: true
-    blockAllReads: path === ""
-    watchChanges: false
-    printErrors: false
-    onLoaded: {
-      if (store.loadingName === "" || path === "") return
-      var name = store.loadingName
-      var body = text()
-      store.finishRead(name, body)
-      if (name === store.ownName && store.ownLoadable) ownFile.reload()
-    }
-    onLoadFailed: store.finishRead("", "")
-  }
-
   Timer {
     interval: 2000
     running: store.dirReady
@@ -342,6 +410,7 @@ Item {
   FileView {
     id: exportJson
     preload: false
+    blockAllReads: true
     atomicWrites: true
     printErrors: false
   }
@@ -349,6 +418,7 @@ Item {
   FileView {
     id: exportCsv
     preload: false
+    blockAllReads: true
     atomicWrites: true
     printErrors: false
   }
