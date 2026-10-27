@@ -91,6 +91,7 @@ Item {
 
   // ---- actions
   function start() {
+    resetForNewDay(Date.now())
     if (breathing) return finishBreath()
     if (paused) return resume()
     if (inExtraRest) complete("completed", Date.now())
@@ -145,6 +146,7 @@ Item {
   }
 
   function resume() {
+    resetForNewDay(Date.now())
     if (!paused) return false
     st.endsAt = Date.now() + st.pausedRemaining * 1000
     st.paused = false
@@ -153,6 +155,7 @@ Item {
   }
 
   function toggle() {
+    resetForNewDay(Date.now())
     if (breathing || !running || inExtraRest) return start()
     if (inOvertime) return finish()
     return paused ? resume() : pause()
@@ -166,6 +169,7 @@ Item {
   }
 
   function skip() {
+    resetForNewDay(Date.now())
     if (!canSkip) return false
     if (!running) {
       st.upNext = Model.nextPhase(upNext, upNext === "focus" ? cycleCount + 1 : cycleCount, config)
@@ -203,6 +207,24 @@ Item {
     return history.moveTo(target)
   }
   property string pendingDataDir: ""
+
+  // Reset the cycle by local calendar day, including after suspend/restart.
+  // An unpaused countdown crossing midnight may finish before we reset.
+  function resetForNewDay(nowMs) {
+    var today = Stats.dayKey(new Date(nowMs))
+    if (st.cycleDay === today) return false
+    if (running && !paused && st.endsAt > nowMs) return false
+    if (running) {
+      var cap = phase !== "focus" || config.overtime ? Model.MAX_OVERTIME_SEC * 1000 : 0
+      complete(paused ? "abandoned" : "completed", paused ? nowMs : Math.min(nowMs, st.endsAt + cap))
+    }
+    cancelBreath()
+    st.cycleCount = 0
+    st.upNext = "focus"
+    st.cycleDay = today
+    now = nowMs
+    return true
+  }
 
   // ---- phase transitions
   function complete(outcome, endMs, message) {
@@ -252,6 +274,7 @@ Item {
   // that ran out while the shell was down stays silent.
   function onTick() {
     now = Date.now()
+    if (resetForNewDay(now)) return
     if (!ticking || st.endsAt <= 0 || remaining > 0) return
     var fresh = now - st.endsAt < 60000
     if (phase !== "focus" || config.overtime) {
@@ -329,6 +352,7 @@ Item {
     property bool paused: false
     property string upNext: "focus"
     property string label: ""
+    property string cycleDay: ""
     property int cycleCount: 0
     property int plannedSec: 0
     property real startedAt: 0
@@ -338,7 +362,7 @@ Item {
     property bool dndOwned: false
   }
 
-  readonly property var stateKeys: ["phase", "paused", "upNext", "label", "cycleCount", "plannedSec",
+  readonly property var stateKeys: ["phase", "paused", "upNext", "label", "cycleDay", "cycleCount", "plannedSec",
     "startedAt", "endsAt", "pausedRemaining", "alerted", "dndOwned"]
 
   FileView {
@@ -352,6 +376,8 @@ Item {
   function loadState() {
     var saved = {}
     try { saved = JSON.parse(stateFile.text() || "{}") } catch (e) { saved = {} }
+    // Older versions did not save a cycle date; use the last session start.
+    if (!saved.cycleDay) saved.cycleDay = Stats.dayKey(new Date(saved.startedAt || Date.now()))
     stateKeys.filter(k => saved[k] !== undefined && saved[k] !== null).forEach(k => { st[k] = saved[k] })
   }
 
@@ -383,7 +409,7 @@ Item {
     interval: 60000
     running: root.active && !root.ticking
     repeat: true
-    onTriggered: root.now = Date.now()
+    onTriggered: root.onTick()
   }
 
   // ---- single ownership (see ServiceGuard.js)
@@ -396,6 +422,8 @@ Item {
     stateKeys.forEach(k => st[k + "Changed"].connect(root.commit))
     Guard.claim(root)
     claimed = true
+    onTick()
+    commit()
     Quickshell.execDetached(["mkdir", "-p", root.stateDir])
   }
   Component.onDestruction: Guard.release(root)
