@@ -62,9 +62,11 @@ var toBool = (v, fallback) => v === undefined || v === null ? fallback : v === t
 var toStr = (v, fallback) => v === undefined || v === null || String(v).trim() === "" ? fallback : String(v)
 
 // The widget's inline shell.json entry, wherever it sits in the layout.
+// Scan every section, not a fixed list: Omarchy 4.5 added centerBegin,
+// centerEnd and tray, and a miss here reads as defaults.
 function findEntry(barConfig, id) {
   var layout = barConfig && barConfig.layout ? barConfig.layout : {}
-  var found = ["left", "center", "right"]
+  var found = Object.keys(layout)
     .map(s => Array.isArray(layout[s]) ? layout[s] : [])
     .reduce((all, section) => all.concat(section), [])
     .find(e => e && e.id === id)
